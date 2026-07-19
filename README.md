@@ -31,13 +31,15 @@ The project implements 3 distinct vision tasks, subjected to 3 different distort
 * **Status:** Completed
 * **Description:** Successfully configured the data pipeline to load `ade20k-tiny`. Implemented an alpha-blending overlay function to visualize the 4 sample clean images alongside their official semantic segmentation ground-truth masks.
 
-### 2. Object Detection Baseline Inference (`src/yolo_baseline.py`)
-* **Status:** Completed
-* **Description:** Integrated the pretrained `yolov8n.pt` (Nano) model from Ultralytics. Conducted baseline inference on the clean sample images to establish the initial bounding boxes and object classification scores, which serve as our baseline pseudo-ground truth.
+### 2. Object Detection Tasks (YOLOv8 & JPEG Compression)
+* **Baseline Inference (`src/yolo_baseline.py`):** Completed. Established baseline pseudo-ground truth on clean images.
+* **Distorted Inference (`src/yolo_distorted.py`):** Completed. Severe JPEG compression (Quality = 5) caused significant degradation, dropping bounding box confidence scores (e.g., from 0.41 to blind/missed detections) and lowering overall model recall due to grid artifacts.
+* **Mitigation & Restoration (`src/yolo_mitigated.py`):** Completed. Applied classical **Bilateral Filtering** ($d=9, \sigma_{Color}=75, \sigma_{Space}=75$) to smooth compression artifacts while preserving crucial structural edges.
+* **Key Findings:** The Bilateral Filter successfully restored the model's performance without fine-tuning. In distorted frames, missed objects (like the sink) were re-detected (Confidence = 0.37), and degraded objects saw a major confidence recovery (e.g., TV frame bounding box confidence jumped from 0.41 to 0.71).
 
 ---
 
 ## Next Computational Steps
-1. **Apply Digital Distortion:** Introduce severe JPEG compression artifacts to the image batch.
-2. **Distorted Inference:** Quantify YOLOv8 performance degradation on the corrupted images.
-3. **Restoration & Mitigation:** Apply classical Bilateral Filtering to mitigate compression artifacts.
+1. **Feature Detection Pipeline:** Set up the ORB feature tracking baseline.
+2. **Noise Application:** Inject Gaussian Noise using Albumentations.
+3. **Low-Level Restoration:** Evaluate Fast Non-Local Means (NLM) filtering to recover keypoint match ratios.
