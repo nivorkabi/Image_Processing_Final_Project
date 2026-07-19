@@ -1,0 +1,9 @@
+numpy
+matplotlib
+opencv-python
+albumentations
+datasets
+torch
+torchvision
+transformers
+ultralytics
