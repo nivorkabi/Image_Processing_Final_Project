@@ -33,8 +33,9 @@ for ax, img_pil in zip(axes, images):
     distorted_img = augmented["image"]
     
     # Apply Fast Non-Local Means Denoising for Color Images
-    # h=15 controls the filter strength (higher means more denoising)
-    restored_img = cv2.fastNlMeansDenoisingColored(distorted_img, None, h=15, hColor=15, templateWindowSize=7, searchWindowSize=21)
+    # h=15 controls the filter strength (higher means more denoising)  
+    # We got bad results for h=15, hColor=15, so we tried with h=35, hColor=35
+    restored_img = cv2.fastNlMeansDenoisingColored(distorted_img, None, h=35, hColor=35, templateWindowSize=7, searchWindowSize=21)
     
     # Convert the restored image to grayscale for OpenCV ORB
     gray = cv2.cvtColor(restored_img, cv2.COLOR_RGB2GRAY)

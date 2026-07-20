@@ -40,11 +40,12 @@ The project implements 3 distinct vision tasks, subjected to 3 different distort
 ### 3. Feature Detection Tasks (ORB & Gaussian Noise)
 * **Baseline Inference (`src/orb_baseline.py`):** Completed. Maintained stable keypoint detection on clear structural features like wall edges, corners, and object boundaries.
 * **Distorted Inference (`src/orb_distorted.py`):** Completed. Injecting Gaussian Noise completely disrupted the algorithm. The local pixel-level intensity gradients introduced by the white noise caused ORB to abandon real structural corners and cluster heavily on random noise pixels.
-* **Mitigation & Restoration (`src/orb_mitigated.py` - Initial Run):** Completed. Applied **Fast Non-Local Means (NLM) Denoising** (with h=15). 
-* **Key Findings:** Unlike YOLO, which responds well to edge-preserving smoothing, ORB proved highly sensitive to residual noise. Even after NLM filtering, micro-fluctuations in pixel intensity remained. Because ORB operates on low-level localized gradients, it continued to select these high-frequency noise remnants as "keypoints" instead of returning to the true physical corners of the image.
+* **Mitigation & Restoration (`src/orb_mitigated.py`):** Completed. Evaluated **Fast Non-Local Means (NLM) Denoising** under two hyperparameter configurations:
+  * *Initial Run (h=15):* Insufficient noise suppression. Residual high-frequency micro-fluctuations remained, causing ORB to still mistake noise remnants for localized pixel gradients instead of physical corners.
+  * *Optimized Run (h=35):* Achieved aggressive noise suppression. In well-exposed frames (e.g., the bathroom image), the background noise was completely flattened into smooth surfaces, forcing ORB to successfully return to true structural features like the arched mirror, faucet, and potted plant boundaries.
 
 ---
 
 ## Next Computational Steps
-1. **Hyperparameter Tuning for NLM:** Increase filtering strength (h parameter) to achieve complete noise suppression for ORB.
-2. **Semantic Segmentation Pipeline:** Establish the SegFormer baseline under low-light conditions.
+1. **Semantic Segmentation Pipeline:** Establish the SegFormer baseline under low-light conditions.
+2. **Low-Light Enhancement:** Implement Gamma Correction and CLAHE to recover structural segmentation masks.
