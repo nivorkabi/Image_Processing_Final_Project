@@ -42,10 +42,10 @@ The project implements 3 distinct vision tasks, subjected to 3 different distort
 * **Distorted Inference (`src/orb_distorted.py`):** Completed. Injecting Gaussian Noise completely disrupted the algorithm. The local pixel-level intensity gradients introduced by the white noise caused ORB to abandon real structural corners and cluster heavily on random noise pixels.
 * **Mitigation & Restoration (`src/orb_mitigated.py`):** Completed. Evaluated **Fast Non-Local Means (NLM) Denoising** under two hyperparameter configurations:
   * *Initial Run (h=15):* Insufficient noise suppression. Residual high-frequency micro-fluctuations remained, causing ORB to still mistake noise remnants for localized pixel gradients instead of physical corners.
-  * *Optimized Run (h=35):* Achieved aggressive noise suppression. In well-exposed frames (e.g., the bathroom image), the background noise was completely flattened into smooth surfaces, forcing ORB to successfully return to true structural features like the arched mirror, faucet, and potted plant boundaries.
+  * *Optimized Run (h=35):* Achieved aggressive noise suppression. In well-exposed frames, the background noise was completely flattened into smooth surfaces, forcing ORB to successfully return to true structural features like the arched mirror boundaries.
 
----
-
-## Next Computational Steps
-1. **Semantic Segmentation Pipeline:** Establish the SegFormer baseline under low-light conditions.
-2. **Low-Light Enhancement:** Implement Gamma Correction and CLAHE to recover structural segmentation masks.
+### 4. Semantic Segmentation Tasks (SegFormer & Low Light)
+* **Baseline Inference (`src/segformer_baseline.py`):** Completed. Generated clean and well-defined semantic segmentations mapping architectural features and indoor objects under baseline lighting conditions.
+* **Distorted Inference (`src/segformer_distorted.py`):** Completed. Subjecting the images to severe low-light conditions (-60% brightness, -40% contrast) completely blinded the model, triggering a domain shift where the structural feature boundaries collapsed into a single uniform prediction block.
+* **Mitigation & Restoration (`src/segformer_mitigated.py`):** Completed. Applied a classical pre-processing pipeline combining non-linear **Gamma Correction (gamma=2.2)** and local adaptive contrast enhancement via **CLAHE**.
+* **Key Findings:** The classical enhancement failed to recover model performance, leading to a complete activation collapse (100% solid color output maps). While these filters successfully brightened features for human perception, the non-linear pixel manipulations severely distorted the underlying pixel distribution. This structural domain shift caused SegFormer's internal layer normalization layers to fail, forcing the network to classify the entire image frame as a single background category. This highlights that robust semantic segmentation in low-light scenarios requires deep domain adaptation or end-to-end network fine-tuning rather than traditional image processing filters.
