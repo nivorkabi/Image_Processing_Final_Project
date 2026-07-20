@@ -2,6 +2,7 @@ import random
 import numpy as np
 import cv2
 import torch
+from pathlib import Path
 from datasets import load_dataset
 import albumentations as A
 from ultralytics import YOLO
@@ -11,7 +12,7 @@ from transformers import SegformerImageProcessor, SegformerForSemanticSegmentati
 random.seed(7)
 np.random.seed(7)
 
-print("=== Starting Full Quantitative Evaluation (Fixed Labels) ===")
+print("=== Starting Full Evaluation with Fine-Tuned Model ===")
 
 # 2. Load Dataset
 ds = load_dataset("nateraw/ade20k-tiny", split="train")
@@ -22,17 +23,22 @@ gt_masks = [ds[i]["label"] for i in idxs]
 # 3. Initialize All Models & Distortions
 print("Loading models...")
 yolo_model = YOLO("yolov8n.pt")
+
+# Load Fine-Tuned YOLO weights if they exist
+ft_yolo_path = Path("runs/detect/train/weights/best.pt")
+yolo_ft_model = YOLO(str(ft_yolo_path)) if ft_yolo_path.exists() else None
+
 seg_processor = SegformerImageProcessor.from_pretrained("nvidia/segformer-b0-finetuned-ade-512-512")
 seg_model = SegformerForSemanticSegmentation.from_pretrained("nvidia/segformer-b0-finetuned-ade-512-512")
 orb = cv2.ORB_create(nfeatures=500)
 bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
 
-# Define Distortions using modern Albumentations parameters to prevent warnings
+# Define Distortions
 jpeg_distort = A.ImageCompression(quality_range=(5, 5), p=1.0)
 noise_distort = A.GaussNoise(p=1.0)
 lowlight_distort = A.RandomBrightnessContrast(brightness_limit=(-0.6, -0.6), contrast_limit=(-0.4, -0.4), p=1.0)
 
-# Helper function for Bounding Box IoU (for YOLO Recall)
+# Helper function for Bounding Box IoU
 def box_iou(boxA, boxB):
     xA = max(boxA[0], boxB[0])
     yA = max(boxA[1], boxB[1])
@@ -57,11 +63,11 @@ def enhance_low_light(img_np):
     return cv2.cvtColor(cv2.merge((cl, a, b)), cv2.COLOR_LAB2RGB)
 
 # Initialize metric accumulators
-yolo_metrics = {"distorted_recall": [], "enhanced_recall": []}
+yolo_metrics = {"distorted_recall": [], "enhanced_recall": [], "ft_recall": []}
 orb_metrics = {"distorted_ratio": [], "enhanced_ratio": []}
 seg_metrics = {"clean_miou": [], "distorted_miou": [], "enhanced_miou": []}
 
-# 4. Evaluation Loop over the 4 sample images
+# 4. Evaluation Loop
 print("Evaluating samples...")
 for img_pil, gt_mask in zip(images, gt_masks):
     img_clean = np.array(img_pil)
@@ -83,6 +89,13 @@ for img_pil, gt_mask in zip(images, gt_masks):
     res_enh = yolo_model.predict(img_enh_jpeg, conf=0.25, verbose=False)[0]
     enh_boxes = res_enh.boxes.xyxy.cpu().numpy() if res_enh.boxes is not None else []
     
+    # Inference with the Fine-Tuned Model directly on Distorted Image
+    if yolo_ft_model:
+        res_ft = yolo_ft_model.predict(img_dist_jpeg, conf=0.25, verbose=False)[0]
+        ft_boxes = res_ft.boxes.xyxy.cpu().numpy() if res_ft.boxes is not None else []
+    else:
+        ft_boxes = []
+    
     if len(clean_boxes) > 0:
         matched_dist = 0
         for cb in clean_boxes:
@@ -95,6 +108,15 @@ for img_pil, gt_mask in zip(images, gt_masks):
             if any(box_iou(cb, eb) >= 0.5 for eb in enh_boxes):
                 matched_enh += 1
         yolo_metrics["enhanced_recall"].append(matched_enh / len(clean_boxes))
+        
+        if yolo_ft_model:
+            matched_ft = 0
+            for cb in clean_boxes:
+                if any(box_iou(cb, fb) >= 0.5 for fb in ft_boxes):
+                    matched_ft += 1
+            yolo_metrics["ft_recall"].append(matched_ft / len(clean_boxes))
+        else:
+            yolo_metrics["ft_recall"].append(0.0)
         
     # ----------------------------------------------------
     # TASK 2: ORB Feature Detection Evaluation
@@ -124,7 +146,7 @@ for img_pil, gt_mask in zip(images, gt_masks):
             orb_metrics["enhanced_ratio"].append(0.0)
 
     # ----------------------------------------------------
-    # TASK 3: SegFormer Semantic Segmentation Evaluation (mIoU with Fixed Shift)
+    # TASK 3: SegFormer Semantic Segmentation Evaluation
     # ----------------------------------------------------
     img_dist_light = lowlight_distort(image=img_clean)["image"]
     img_enh_light = enhance_low_light(img_dist_light)
@@ -140,7 +162,6 @@ for img_pil, gt_mask in zip(images, gt_masks):
     pred_dist = get_seg_pred(img_dist_light)
     pred_enh = get_seg_pred(img_enh_light)
     
-    # The fix: Align gt (1..150) with pred (0..149) by subtracting 1 from the comparison target
     def compute_miou(pred, gt):
         valid = gt > 0
         classes = np.unique(gt[valid])
@@ -157,12 +178,12 @@ for img_pil, gt_mask in zip(images, gt_masks):
     seg_metrics["enhanced_miou"].append(compute_miou(pred_enh, gt_mask_np))
 
 # 5. Print Final Summary Table
-print("\n" + "="*50)
-print("FINAL QUANTITATIVE METRICS SUMMARY TABLE")
-print("="*50)
-print(f"| Vision Task | Metric | Baseline (Clean) | Distorted | Enhanced (Mitigation) |")
-print(f"| :--- | :--- | :--- | :--- | :--- |")
-print(f"| Object Detection (YOLOv8) | Recall (vs Baseline) | 1.000 | {np.mean(yolo_metrics['distorted_recall']):.3f} | {np.mean(yolo_metrics['enhanced_recall']):.3f} |")
-print(f"| Feature Detection (ORB) | Matching Ratio | 1.000 | {np.mean(orb_metrics['distorted_ratio']):.3f} | {np.mean(orb_metrics['enhanced_ratio']):.3f} |")
-print(f"| Segmentation (SegFormer) | mean IoU (vs GT) | {np.mean(seg_metrics['clean_miou']):.3f} | {np.mean(seg_metrics['distorted_miou']):.3f} | {np.mean(seg_metrics['enhanced_miou']):.3f} |")
-print("="*50)
+print("\n" + "="*70)
+print("FINAL QUANTITATIVE METRICS SUMMARY TABLE (WITH FINE-TUNING)")
+print("="*70)
+print(f"| Vision Task | Metric | Baseline (Clean) | Distorted | Enhanced (Bilateral/NLM) | Fine-Tuned Model |")
+print(f"| :--- | :--- | :--- | :--- | :--- | :--- |")
+print(f"| Object Detection (YOLOv8) | Recall (vs Baseline) | 1.000 | {np.mean(yolo_metrics['distorted_recall']):.3f} | {np.mean(yolo_metrics['enhanced_recall']):.3f} | {np.mean(yolo_metrics['ft_recall']):.3f} |")
+print(f"| Feature Detection (ORB) | Matching Ratio | 1.000 | {np.mean(orb_metrics['distorted_ratio']):.3f} | {np.mean(orb_metrics['enhanced_ratio']):.3f} | N/A (Classical Task) |")
+print(f"| Segmentation (SegFormer) | mean IoU (vs GT) | {np.mean(seg_metrics['clean_miou']):.3f} | {np.mean(seg_metrics['distorted_miou']):.3f} | {np.mean(seg_metrics['enhanced_miou']):.3f} | N/A (Pending Step) |")
+print("="*70)

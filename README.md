@@ -27,12 +27,12 @@ The project implements 3 distinct vision tasks, subjected to 3 different distort
 
 ## Quantitative Performance Summary
 
-The table below presents the full quantitative evaluation across all three vision pipelines under clean, distorted, and enhanced (mitigated) states:
+The table below presents the final quantitative evaluation across all three vision pipelines under clean, distorted, enhanced (mitigated), and fine-tuned states:
 
 | Vision Task | Metric | Baseline (Clean) | Distorted | Enhanced (Mitigation) | Fine-Tuned Model |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Object Detection (YOLOv8)** | Recall (vs Baseline) | 1.000 | 0.067 | 0.633 | *Pending Eval* |
-| **Feature Detection (ORB)** | Matching Ratio | 1.000 | 0.420 | 0.331 | N/A (Classical Task) |
+| **Object Detection (YOLOv8)** | Recall (vs Baseline) | 1.000 | 0.067 | 0.633 | 0.067 |
+| **Feature Detection (ORB)** | Matching Ratio | 1.000 | 0.442 | 0.364 | N/A (Classical Task) |
 | **Segmentation (SegFormer)** | mean IoU (vs GT) | 0.532 | 0.000 | 0.000 | N/A (Pending Step) |
 
 ---
@@ -55,7 +55,7 @@ Severe JPEG compression completely degraded structural features, dropping model 
 ![YOLO Mitigated](yolo_mitigated.png)
 
 ### 3. Feature Detection Tasks (ORB & Gaussian Noise)
-Gaussian Noise disrupted localized pixel gradients, dropping ORB matching accuracy to **0.420**. Aggressive NLM filtering ($h=35$) cleared the background noise visually and returned keypoints to physical objects, but the resulting pixel smoothing altered the descriptor distributions, yielding a matching ratio of **0.331**.
+Gaussian Noise disrupted localized pixel gradients, dropping ORB matching accuracy to **0.442**. Aggressive NLM filtering ($h=35$) cleared the background noise visually and returned keypoints to physical objects, but the resulting pixel smoothing altered the descriptor distributions, yielding a matching ratio of **0.364**.
 
 * **Baseline Clean Keypoints:**
 ![ORB Baseline](orb_baseline.png)
@@ -76,13 +76,7 @@ The baseline model achieved a **0.532 mIoU** against the Ground Truth. Severe lo
 * **Mitigated (Gamma Correction + CLAHE):**
 ![SegFormer Mitigated](segformer_mitigated.png)
 
-### 5. Model Fine-Tuning Pipeline (YOLOv8 - Week 10)
+### 5. Model Fine-Tuning & Evaluation Pipeline (Weeks 10-11)
 * **Status:** Completed
-* **Description:** Implemented an end-to-end local fine-tuning pipeline (`src/yolo_finetune.py`) to adapt the object detection model to severe digital distortions.
-* **Methodology:** Generated robust **Pseudo-Labels** by extracting bounding box predictions from clean baseline images (confidence threshold = 0.35, IoU threshold = 0.5). The baseline model was then fine-tuned directly on the JPEG-distorted images for 3 epochs with a batch size of 2.
-* **Training Outcomes:** The network successfully adapted its convolutional feature extractors to blocky compression artifacts, achieving a final validation Precision score of **0.971** across target object classes (toilet, sink, clock). The optimized weights were successfully exported to `runs/detect/train/weights/best.pt`.
-
----
-
-## Next Computational Steps
-1. **Evaluate Fine-Tuned Performance (Week 11):** Run the core evaluation loop using the newly fine-tuned YOLOv8 weights to compare deep domain adaptation metrics against traditional pre-processing filters.
+* **Description:** Evaluated the performance of the fine-tuned YOLOv8 model weights (`runs/detect/train/weights/best.pt`) against traditional pre-processing filters under severe JPEG distortions.
+* **Key Findings:** The fine-tuned model yielded a Recall of **0.067**, failing to improve upon the unmitigated distorted baseline. Under severe dataset size constraints (4 images) and a short training envelope (3 epochs), the model executed too few gradient updates to adjust its feature representations. This highlights that deep domain adaptation requires extensive target-domain data and training time, whereas classical Bilateral Filtering achieves an immediate block-artifact smoothing effect based on static mathematical priors.
